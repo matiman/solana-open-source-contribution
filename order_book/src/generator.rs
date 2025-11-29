@@ -1,5 +1,5 @@
 use crate::order::{Order, Side};
-use rand::Rng;
+use rand::{Rng, SeedableRng};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 
@@ -7,7 +7,7 @@ const PRICE_LEVELS: [u64; 5] = [100, 101, 102, 103, 104];
 
 #[allow(dead_code)]
 pub async fn generate_orders(tx: mpsc::Sender<Order>, count: u64) {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rngs::StdRng::from_entropy();
 
     for id in 1..=count {
         // Random side (50/50)
