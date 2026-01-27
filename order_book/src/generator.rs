@@ -78,7 +78,7 @@ mod tests {
                 let order = rx.recv().await.unwrap();
                 // Side must be either Buy or Sell (this will compile only if valid)
                 match order.side {
-                    Side::Buy | Side::Sell => {}, // Valid
+                    Side::Buy | Side::Sell => {} // Valid
                 }
             }
         });
