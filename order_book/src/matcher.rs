@@ -18,19 +18,9 @@ pub async fn run_matcher(mut rx: mpsc::Receiver<Order>) -> MatcherStats {
         match order_book.try_match(order) {
             Some((_buy, _sell)) => {
                 matched_count += 1;
-                // Comment out for performance - uncomment to see individual matches
-                // println!(
-                //     "MATCHED: Buy #{} <-> Sell #{} @ ${}",
-                //     _buy.id, _sell.id, _buy.price
-                // );
             }
             None => {
                 queued_count += 1;
-                // Comment out for performance - uncomment to see individual queued orders
-                // println!(
-                //     "QUEUED: {:?} #{} @ ${}",
-                //     order.side, order.id, order.price
-                // );
             }
         }
     }
