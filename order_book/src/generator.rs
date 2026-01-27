@@ -5,7 +5,7 @@ use tokio::sync::mpsc;
 
 const PRICE_LEVELS: [u64; 5] = [100, 101, 102, 103, 104];
 
-#[allow(dead_code)]
+
 pub async fn generate_orders(tx: mpsc::Sender<Order>, count: u64) {
     let mut rng = rand::rngs::StdRng::from_entropy();
 

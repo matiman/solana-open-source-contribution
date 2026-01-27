@@ -6,7 +6,7 @@ pub enum Side {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[allow(dead_code)]
+
 pub struct Order {
     pub id: u64,
     pub side: Side,

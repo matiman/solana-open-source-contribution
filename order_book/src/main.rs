@@ -6,7 +6,7 @@ mod order_book;
 use std::time::Instant;
 use tokio::sync::mpsc;
 
-const TOTAL_ORDERS: u64 = 1_000_000;
+const TOTAL_ORDERS: u64 = 10_000_000;
 const CHANNEL_BUFFER_SIZE: usize = 10_000;
 
 #[tokio::main]
