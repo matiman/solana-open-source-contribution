@@ -15,7 +15,7 @@ pub async fn run_matcher(mut rx: mpsc::Receiver<Order>) -> MatcherStats {
     let mut queued_count = 0u64;
 
     while let Some(order) = rx.recv().await {
-        match order_book.try_match(order.clone()) {
+        match order_book.try_match(order) {
             Some((_buy, _sell)) => {
                 matched_count += 1;
                 // Comment out for performance - uncomment to see individual matches

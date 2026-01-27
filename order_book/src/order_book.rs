@@ -1,13 +1,14 @@
 use crate::order::{Order, Side};
 use std::collections::{HashMap, VecDeque};
 
-#[allow(dead_code)]
+
 pub struct OrderBook {
+    // HashMap of price to VecDeque of orders for buy side and sell side. FIFO matching.
     buys: HashMap<u64, VecDeque<Order>>,
     sells: HashMap<u64, VecDeque<Order>>,
 }
 
-#[allow(dead_code)]
+
 impl OrderBook {
     pub fn new() -> Self {
         OrderBook {

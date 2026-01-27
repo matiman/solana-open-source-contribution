@@ -6,12 +6,12 @@ mod order_book;
 use std::time::Instant;
 use tokio::sync::mpsc;
 
-const TOTAL_ORDERS: u64 = 1_000_000;
+const TOTAL_ORDERS: u64 = 10_000_000;
 const CHANNEL_BUFFER_SIZE: usize = 10_000;
 
 #[tokio::main]
 async fn main() {
-    println!("🚀 Order Book Matching Engine - High Performance");
+    println!("🚀 High Performance Order Book Matching Engine");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     println!("Processing {} orders...\n", TOTAL_ORDERS);
 
@@ -43,7 +43,6 @@ async fn main() {
     let orders_per_sec = TOTAL_ORDERS as f64 / elapsed_secs;
     let match_rate = (stats.matched as f64 / TOTAL_ORDERS as f64) * 100.0;
 
-    // Print summary statistics
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     println!("📊 Summary Statistics");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
