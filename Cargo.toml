@@ -1,0 +1,19 @@
+[package]
+name = "order_book"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+rand = "0.8"
+crossbeam-channel = "0.5"
+
+[profile.release]
+debug = true # Enable debug symbols for profiling
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["async_tokio"] }
+
+[[bench]]
+name = "order_matching"
+harness = false
