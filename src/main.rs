@@ -1,8 +1,4 @@
-mod generator;
-mod matcher;
-mod order;
-mod order_book;
-
+use order_book::{generator,matching_engine::MatchingEngine};
 use std::time::Instant;
 
 const TOTAL_ORDERS: u64 = 100_000_000;
@@ -13,44 +9,56 @@ fn main() {
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     println!("Processing {} orders...\n", TOTAL_ORDERS);
 
-    // Create bounded channel with buffer size 10,000
     let (tx, rx) = crossbeam_channel::bounded(CHANNEL_BUFFER_SIZE);
 
-    // Start timing
     let start = Instant::now();
     let gen_start = Instant::now();
 
-    // Spawn generator thread
     let generator_handle = std::thread::spawn(move || {
-        generator::generate_orders(tx, TOTAL_ORDERS);
+        generator::generate_orders(tx, TOTAL_ORDERS, 1);
     });
 
     let match_start = Instant::now();
-    // Spawn matcher thread
-    let matcher_handle = std::thread::spawn(move || matcher::run_matcher(rx));
+    let engine_handle = std::thread::spawn(move || MatchingEngine::run(rx));
 
-    // Wait for both threads to complete
     generator_handle.join().expect("Generator thread panicked");
     let gen_time = gen_start.elapsed();
 
-    let stats = matcher_handle.join().expect("Matcher thread panicked");
+    let stats = engine_handle.join().expect("Matching engine thread panicked");
     let match_time = match_start.elapsed();
 
-    // Calculate elapsed time
     let elapsed = start.elapsed();
     let elapsed_secs = elapsed.as_secs_f64();
     let orders_per_sec = TOTAL_ORDERS as f64 / elapsed_secs;
-    let match_rate = (stats.matched as f64 / TOTAL_ORDERS as f64) * 100.0;
 
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     println!("📊 Summary Statistics");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     println!("Total orders processed: {}", TOTAL_ORDERS);
+    println!("Total trades executed:  {}", stats.total_trades);
+    println!("Volume matched:         {} units", stats.volume_matched);
+    println!();
     println!(
-        "Matched orders:         {} ({:.1}%)",
-        stats.matched, match_rate
+        "Orders fully filled:    {} ({:.1}%)",
+        stats.orders_fully_filled,
+        (stats.orders_fully_filled as f64 / stats.orders_received as f64) * 100.0
     );
-    println!("Queued orders:          {}", stats.queued);
+    println!(
+        "Orders partially filled: {} ({:.1}%)",
+        stats.orders_partially_filled,
+        (stats.orders_partially_filled as f64 / stats.orders_received as f64) * 100.0
+    );
+    println!(
+        "Orders queued (no fill): {} ({:.1}%)",
+        stats.orders_queued,
+        (stats.orders_queued as f64 / stats.orders_received as f64) * 100.0
+    );
+    println!(
+        "Orders rejected (invalid): {} ({:.1}%)",
+        stats.orders_rejected,
+        (stats.orders_rejected as f64 / stats.orders_received as f64) * 100.0
+    );
+    println!();
     println!("Elapsed time:           {:.3}s", elapsed_secs);
     println!("Throughput:             {:.0} orders/sec", orders_per_sec);
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -62,7 +70,7 @@ fn main() {
         (gen_time.as_secs_f64() / elapsed_secs) * 100.0
     );
     println!(
-        "Matcher time:           {:.3}s ({:.1}%)",
+        "Matching engine time:   {:.3}s ({:.1}%)",
         match_time.as_secs_f64(),
         (match_time.as_secs_f64() / elapsed_secs) * 100.0
     );

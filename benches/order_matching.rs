@@ -1,6 +1,6 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use order_book::order::{Order, Side};
-use order_book::order_book::OrderBook;
+use order_book::order_book::LimitOrderBook;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
@@ -10,7 +10,8 @@ fn generate_test_order(rng: &mut StdRng, id: u64) -> Order {
     } else {
         Side::Sell
     };
-    let price = [100, 101, 102, 103, 104][rng.gen_range(0..5)];
+    // Price in ticks (1 tick = $0.01), range $100.00–$200.00
+    let price = rng.gen_range(10_000_u64..=20_000);
 
     Order {
         id,
@@ -27,7 +28,7 @@ fn bench_try_match(c: &mut Criterion) {
     for size in [100, 1_000, 10_000, 100_000, 10_000_000].iter() {
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
             let mut rng = StdRng::from_entropy();
-            let mut order_book = OrderBook::new();
+            let mut order_book = LimitOrderBook::new();
 
             // Pre-populate order book with some orders
             for i in 0..size / 2 {
@@ -51,7 +52,7 @@ fn bench_add_order(c: &mut Criterion) {
     for size in [100, 1_000, 10_000, 100_000, 10_000_000].iter() {
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
             let mut rng = StdRng::from_entropy();
-            let mut order_book = OrderBook::new();
+            let mut order_book = LimitOrderBook::new();
 
             b.iter(|| {
                 let order = generate_test_order(&mut rng, size);
