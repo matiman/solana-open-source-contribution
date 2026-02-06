@@ -24,40 +24,43 @@ impl MatchingEngine {
         }
     }
 
-    pub fn process_limit_order(&mut self, order: Order) -> MatchResult {
-        self.book.try_match(order)
+    /// Process a limit order. Trades are written to the caller-provided buffer.
+    pub fn process_limit_order(
+        &mut self,
+        order: Order,
+        trades: &mut Vec<(Order, Order)>,
+    ) -> MatchResult {
+        self.book.try_match(order, trades)
     }
 
     /// Consume orders from the channel until it closes, returning session statistics.
     pub fn run(rx: Receiver<Order>) -> MatchingStats {
         let mut engine = Self::new();
         let mut stats = MatchingStats::default();
+        let mut trades = Vec::new(); // Caller-owned buffer, reused across all orders
 
         while let Ok(order) = rx.recv() {
             stats.orders_received += 1;
 
-            let result = engine.process_limit_order(order);
+            let result = engine.process_limit_order(order, &mut trades);
 
             if result.validation_error.is_some() {
                 stats.orders_rejected += 1;
-                // Don't recycle — result.trades is empty Vec, would lose existing buffer capacity
                 continue;
             }
 
-            stats.total_trades += result.trades.len() as u64;
-            for (buy, _sell) in &result.trades {
+            stats.total_trades += result.trade_count as u64;
+            for (buy, _sell) in &trades {
                 stats.volume_matched += buy.quantity;
             }
 
-            if result.trades.is_empty() {
+            if result.trade_count == 0 {
                 stats.orders_queued += 1;
             } else if result.remaining_quantity == 0 {
                 stats.orders_fully_filled += 1;
             } else {
                 stats.orders_partially_filled += 1;
             }
-
-            engine.book.recycle_trades_buffer(result.trades);
         }
 
         stats

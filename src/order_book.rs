@@ -7,10 +7,10 @@ pub const MIN_TICK: u64 = 10_000;
 pub const MAX_TICK: u64 = 20_000;
 const NUM_LEVELS: usize = (MAX_TICK - MIN_TICK + 1) as usize; // 10,001
 
-// Result of matching an order, containing all trades and remaining quantity
+/// Result of matching an order. Trades are written to the caller-provided buffer.
 #[derive(Debug, Clone)]
 pub struct MatchResult {
-    pub trades: Vec<(Order, Order)>,  // Vec of (buy_order, sell_order) pairs
+    pub trade_count: usize,            // Number of trades written to the buffer
     pub remaining_quantity: u64,       // Quantity that wasn't matched (added to book)
     pub validation_error: Option<OrderValidationError>,  // If order was invalid
 }
@@ -21,9 +21,6 @@ pub struct LimitOrderBook {
     // This is how production exchange matching engines work.
     buys: Vec<VecDeque<Order>>,
     sells: Vec<VecDeque<Order>>,
-    // Reusable buffer — avoids heap allocation on every try_match call.
-    // Caller should recycle via recycle_trades_buffer() after processing.
-    trades_buffer: Vec<(Order, Order)>,
 }
 
 /// Convert a tick price to an array index
@@ -37,7 +34,6 @@ impl LimitOrderBook {
         Self {
             buys: vec![VecDeque::new(); NUM_LEVELS],
             sells: vec![VecDeque::new(); NUM_LEVELS],
-            trades_buffer: Vec::new(),
         }
     }
 
@@ -70,18 +66,15 @@ impl LimitOrderBook {
         }
     }
 
-    /// Return a used trades Vec so its allocated memory can be reused on the next try_match call.
-    /// This avoids a heap allocation per order in the hot loop.
-    pub fn recycle_trades_buffer(&mut self, mut buffer: Vec<(Order, Order)>) {
-        buffer.clear();
-        self.trades_buffer = buffer;
-    }
+    /// Match an incoming order against the book. Trades are written to the caller-provided buffer.
+    /// This makes buffer reuse explicit — the caller owns the buffer and decides when to reuse it.
+    pub fn try_match(&mut self, mut order: Order, trades: &mut Vec<(Order, Order)>) -> MatchResult {
+        trades.clear();
 
-    pub fn try_match(&mut self, mut order: Order) -> MatchResult {
         // Validate order before processing
         if let Err(err) = order.validate() {
             return MatchResult {
-                trades: Vec::new(),
+                trade_count: 0,
                 remaining_quantity: order.quantity,
                 validation_error: Some(err),
             };
@@ -90,16 +83,13 @@ impl LimitOrderBook {
         // Circuit breaker — reject orders outside the instrument's allowed price range
         if order.price < MIN_TICK || order.price > MAX_TICK {
             return MatchResult {
-                trades: Vec::new(),
+                trade_count: 0,
                 remaining_quantity: order.quantity,
                 validation_error: Some(OrderValidationError::PriceOutOfRange),
             };
         }
 
         let idx = price_index(order.price);
-        // Reuse pre-allocated buffer instead of allocating a new Vec each call
-        let mut trades = std::mem::take(&mut self.trades_buffer);
-        trades.clear();
 
         match order.side {
             Side::Buy => {
@@ -197,7 +187,7 @@ impl LimitOrderBook {
         }
 
         MatchResult {
-            trades,
+            trade_count: trades.len(),
             remaining_quantity: remaining,
             validation_error: None,
         }
@@ -320,6 +310,7 @@ mod tests {
     #[test]
     fn test_buy_matches_existing_sell() {
         let mut book = LimitOrderBook::new();
+        let mut trades = Vec::new();
 
         // Add a sell order first
         let sell_order = Order {
@@ -340,13 +331,13 @@ mod tests {
             timestamp: 2000,
         };
 
-        let result = book.try_match(buy_order.clone());
+        let result = book.try_match(buy_order.clone(), &mut trades);
 
         // Should have exactly 1 trade
-        assert_eq!(result.trades.len(), 1);
+        assert_eq!(result.trade_count, 1);
         assert_eq!(result.remaining_quantity, 0);  // Fully filled
 
-        let (matched_buy, matched_sell) = &result.trades[0];
+        let (matched_buy, matched_sell) = &trades[0];
         assert_eq!(matched_buy.id, buy_order.id);
         assert_eq!(matched_buy.quantity, 10);  // Full quantity traded
         assert_eq!(matched_sell.id, sell_order.id);
@@ -359,6 +350,7 @@ mod tests {
     #[test]
     fn test_sell_matches_existing_buy() {
         let mut book = LimitOrderBook::new();
+        let mut trades = Vec::new();
 
         // Add a buy order first
         let buy_order = Order {
@@ -379,13 +371,13 @@ mod tests {
             timestamp: 2000,
         };
 
-        let result = book.try_match(sell_order.clone());
+        let result = book.try_match(sell_order.clone(), &mut trades);
 
         // Should have exactly 1 trade
-        assert_eq!(result.trades.len(), 1);
+        assert_eq!(result.trade_count, 1);
         assert_eq!(result.remaining_quantity, 0);  // Fully filled
 
-        let (matched_buy, matched_sell) = &result.trades[0];
+        let (matched_buy, matched_sell) = &trades[0];
         assert_eq!(matched_buy.id, buy_order.id);
         assert_eq!(matched_buy.quantity, 10);
         assert_eq!(matched_sell.id, sell_order.id);
@@ -398,6 +390,7 @@ mod tests {
     #[test]
     fn test_no_match_different_price() {
         let mut book = LimitOrderBook::new();
+        let mut trades = Vec::new();
 
         // Add a sell order at $104.00
         let sell_order = Order {
@@ -418,10 +411,10 @@ mod tests {
             timestamp: 2000,
         };
 
-        let result = book.try_match(buy_order.clone());
+        let result = book.try_match(buy_order.clone(), &mut trades);
 
         // No trades should occur
-        assert_eq!(result.trades.len(), 0);
+        assert_eq!(result.trade_count, 0);
         assert_eq!(result.remaining_quantity, 10);  // All quantity goes to book
 
         // Verify buy order was added to book
@@ -438,6 +431,7 @@ mod tests {
     #[test]
     fn test_no_match_empty_book() {
         let mut book = LimitOrderBook::new();
+        let mut trades = Vec::new();
 
         let buy_order = Order {
             id: 1,
@@ -447,10 +441,10 @@ mod tests {
             timestamp: 1000,
         };
 
-        let result = book.try_match(buy_order.clone());
+        let result = book.try_match(buy_order.clone(), &mut trades);
 
         // No trades should occur
-        assert_eq!(result.trades.len(), 0);
+        assert_eq!(result.trade_count, 0);
         assert_eq!(result.remaining_quantity, 10);  // All quantity goes to book
 
         // Verify order was added to book
@@ -499,27 +493,28 @@ mod tests {
             timestamp: 4000,
         };
 
-        let result = book.try_match(buy_order.clone());
+        let mut trades = Vec::new();
+        let result = book.try_match(buy_order.clone(), &mut trades);
 
         // Should have 3 trades
-        assert_eq!(result.trades.len(), 3);
+        assert_eq!(result.trade_count, 3);
 
         // First trade: buy 3 units from sell1
-        let (buy1, sell1) = &result.trades[0];
+        let (buy1, sell1) = &trades[0];
         assert_eq!(buy1.id, 10);
         assert_eq!(buy1.quantity, 3);
         assert_eq!(sell1.id, 1);
         assert_eq!(sell1.quantity, 3);
 
         // Second trade: buy 2 units from sell2
-        let (buy2, sell2) = &result.trades[1];
+        let (buy2, sell2) = &trades[1];
         assert_eq!(buy2.id, 10);
         assert_eq!(buy2.quantity, 2);
         assert_eq!(sell2.id, 2);
         assert_eq!(sell2.quantity, 2);
 
         // Third trade: buy 3 units from sell3 (partial fill of sell3)
-        let (buy3, sell3) = &result.trades[2];
+        let (buy3, sell3) = &trades[2];
         assert_eq!(buy3.id, 10);
         assert_eq!(buy3.quantity, 3);
         assert_eq!(sell3.id, 3);
@@ -563,12 +558,13 @@ mod tests {
             timestamp: 2000,
         };
 
-        let result = book.try_match(sell_order.clone());
+        let mut trades = Vec::new();
+        let result = book.try_match(sell_order.clone(), &mut trades);
 
         // Should have 1 trade for 5 units
-        assert_eq!(result.trades.len(), 1);
+        assert_eq!(result.trade_count, 1);
 
-        let (buy, sell) = &result.trades[0];
+        let (buy, sell) = &trades[0];
         assert_eq!(buy.id, 1);
         assert_eq!(buy.quantity, 5);  // Buy order fully consumed
         assert_eq!(sell.id, 2);
@@ -620,13 +616,14 @@ mod tests {
             timestamp: 3000,
         };
 
-        let result = book.try_match(buy_order.clone());
+        let mut trades = Vec::new();
+        let result = book.try_match(buy_order.clone(), &mut trades);
 
         // Should have exactly 1 trade
-        assert_eq!(result.trades.len(), 1);
+        assert_eq!(result.trade_count, 1);
         assert_eq!(result.remaining_quantity, 0);  // Fully filled
 
-        let (matched_buy, matched_sell) = &result.trades[0];
+        let (matched_buy, matched_sell) = &trades[0];
         assert_eq!(matched_buy.id, buy_order.id);
         assert_eq!(matched_sell.id, sell_order1.id); // Should match the FIRST sell order (FIFO)
 
@@ -640,6 +637,7 @@ mod tests {
     #[test]
     fn test_zero_quantity_order_rejected() {
         let mut book = LimitOrderBook::new();
+        let mut trades = Vec::new();
 
         let invalid_order = Order {
             id: 1,
@@ -649,10 +647,10 @@ mod tests {
             timestamp: 1000,
         };
 
-        let result = book.try_match(invalid_order);
+        let result = book.try_match(invalid_order, &mut trades);
 
         // Order should be rejected
-        assert_eq!(result.trades.len(), 0);
+        assert_eq!(result.trade_count, 0);
         assert_eq!(result.remaining_quantity, 0);
         assert!(result.validation_error.is_some());
 
@@ -663,6 +661,7 @@ mod tests {
     #[test]
     fn test_zero_price_order_rejected() {
         let mut book = LimitOrderBook::new();
+        let mut trades = Vec::new();
 
         let invalid_order = Order {
             id: 1,
@@ -672,10 +671,10 @@ mod tests {
             timestamp: 1000,
         };
 
-        let result = book.try_match(invalid_order);
+        let result = book.try_match(invalid_order, &mut trades);
 
         // Order should be rejected
-        assert_eq!(result.trades.len(), 0);
+        assert_eq!(result.trade_count, 0);
         assert_eq!(result.remaining_quantity, 10);
         assert!(result.validation_error.is_some());
 
@@ -686,6 +685,7 @@ mod tests {
     #[test]
     fn test_circuit_breaker_rejects_out_of_range_price() {
         let mut book = LimitOrderBook::new();
+        let mut trades = Vec::new();
 
         // Price below MIN_TICK (circuit breaker)
         let too_low = Order {
@@ -695,9 +695,9 @@ mod tests {
             quantity: 10,
             timestamp: 1000,
         };
-        let result = book.try_match(too_low);
+        let result = book.try_match(too_low, &mut trades);
         assert_eq!(result.validation_error, Some(OrderValidationError::PriceOutOfRange));
-        assert_eq!(result.trades.len(), 0);
+        assert_eq!(result.trade_count, 0);
         assert_eq!(result.remaining_quantity, 10);
 
         // Price above MAX_TICK (circuit breaker)
@@ -708,9 +708,9 @@ mod tests {
             quantity: 5,
             timestamp: 2000,
         };
-        let result = book.try_match(too_high);
+        let result = book.try_match(too_high, &mut trades);
         assert_eq!(result.validation_error, Some(OrderValidationError::PriceOutOfRange));
-        assert_eq!(result.trades.len(), 0);
+        assert_eq!(result.trade_count, 0);
         assert_eq!(result.remaining_quantity, 5);
 
         // Edge: exactly at MIN_TICK and MAX_TICK should be accepted
@@ -721,7 +721,7 @@ mod tests {
             quantity: 1,
             timestamp: 3000,
         };
-        let result = book.try_match(at_min);
+        let result = book.try_match(at_min, &mut trades);
         assert!(result.validation_error.is_none());
 
         let at_max = Order {
@@ -731,7 +731,7 @@ mod tests {
             quantity: 1,
             timestamp: 4000,
         };
-        let result = book.try_match(at_max);
+        let result = book.try_match(at_max, &mut trades);
         assert!(result.validation_error.is_none());
     }
 }
