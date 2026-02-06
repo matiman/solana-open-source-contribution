@@ -66,10 +66,10 @@ impl LimitOrderBook {
         }
     }
 
-    /// Match an incoming order against the book. Trades are written to the caller-provided buffer.
-    /// This makes buffer reuse explicit — the caller owns the buffer and decides when to reuse it.
+    /// Match an incoming order against the book. Trades are appended to the caller-provided buffer.
+    /// The caller owns the buffer and decides when to clear it (like `Read::read_to_end`).
     pub fn try_match(&mut self, mut order: Order, trades: &mut Vec<(Order, Order)>) -> MatchResult {
-        trades.clear();
+        let start_len = trades.len();
 
         // Validate order before processing
         if let Err(err) = order.validate() {
@@ -187,7 +187,7 @@ impl LimitOrderBook {
         }
 
         MatchResult {
-            trade_count: trades.len(),
+            trade_count: trades.len() - start_len,
             remaining_quantity: remaining,
             validation_error: None,
         }

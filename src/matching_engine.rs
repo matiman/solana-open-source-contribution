@@ -41,6 +41,7 @@ impl MatchingEngine {
 
         while let Ok(order) = rx.recv() {
             stats.orders_received += 1;
+            trades.clear(); // Caller controls buffer lifecycle
 
             let result = engine.process_limit_order(order, &mut trades);
 
