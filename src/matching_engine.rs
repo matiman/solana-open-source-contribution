@@ -1,3 +1,4 @@
+use crate::generator::OrderBatch;
 use crate::order::Order;
 use crate::order_book::{LimitOrderBook, MatchResult};
 use crossbeam_channel::Receiver;
@@ -33,34 +34,38 @@ impl MatchingEngine {
         self.book.try_match(order, trades)
     }
 
-    /// Consume orders from the channel until it closes, returning session statistics.
-    pub fn run(rx: Receiver<Order>) -> MatchingStats {
+    /// Consume order batches from the channel until it closes, returning session statistics.
+    pub fn run(rx: Receiver<OrderBatch>) -> MatchingStats {
         let mut engine = Self::new();
         let mut stats = MatchingStats::default();
         let mut trades = Vec::new(); // Caller-owned buffer, reused across all orders
 
-        while let Ok(order) = rx.recv() {
-            stats.orders_received += 1;
-            trades.clear(); // Caller controls buffer lifecycle
+        // Outer loop: receive batches
+        while let Ok(batch) = rx.recv() {
+            // Inner loop: process each order in the batch
+            for order in batch {
+                stats.orders_received += 1;
+                trades.clear(); // Caller controls buffer lifecycle
 
-            let result = engine.process_limit_order(order, &mut trades);
+                let result = engine.process_limit_order(order, &mut trades);
 
-            if result.validation_error.is_some() {
-                stats.orders_rejected += 1;
-                continue;
-            }
+                if result.validation_error.is_some() {
+                    stats.orders_rejected += 1;
+                    continue;
+                }
 
-            stats.total_trades += result.trade_count as u64;
-            for (buy, _sell) in &trades {
-                stats.volume_matched += buy.quantity;
-            }
+                stats.total_trades += result.trade_count as u64;
+                for (buy, _sell) in &trades {
+                    stats.volume_matched += buy.quantity as u64;
+                }
 
-            if result.trade_count == 0 {
-                stats.orders_queued += 1;
-            } else if result.remaining_quantity == 0 {
-                stats.orders_fully_filled += 1;
-            } else {
-                stats.orders_partially_filled += 1;
+                if result.trade_count == 0 {
+                    stats.orders_queued += 1;
+                } else if result.remaining_quantity == 0 {
+                    stats.orders_fully_filled += 1;
+                } else {
+                    stats.orders_partially_filled += 1;
+                }
             }
         }
 
@@ -84,16 +89,17 @@ mod tests {
     fn test_matching_engine_processes_order() {
         let (tx, rx) = crossbeam_channel::unbounded();
 
-        // Send a buy order
+        // Send a buy order as a single-order batch
         let order = Order {
+            timestamp: 1000,
             id: 1,
-            side: Side::Buy,
             price: 10_000,
             quantity: 1,
-            timestamp: 1000,
+            instrument: 0,
+            side: Side::Buy,
         };
 
-        tx.send(order.clone()).unwrap();
+        tx.send(vec![order]).unwrap();
 
         // Close the channel so engine will exit
         drop(tx);
@@ -112,31 +118,37 @@ mod tests {
     fn test_matching_engine_processes_multiple_orders_with_matches() {
         let (tx, rx) = crossbeam_channel::unbounded();
 
-        // Send 10 sell orders at various prices (ticks)
-        for i in 1..=10 {
+        // Collect sell orders into a batch
+        let mut sell_batch = Vec::new();
+        for i in 1u32..=10 {
             let price = 10_000 + (i % 5) * 100; // Prices: 10100, 10200, 10300, 10400, 10000, ...
             let order = Order {
+                timestamp: 1000 + i as u64,
                 id: i,
-                side: Side::Sell,
                 price,
                 quantity: 1,
-                timestamp: 1000 + i,
+                instrument: 0,
+                side: Side::Sell,
             };
-            tx.send(order).unwrap();
+            sell_batch.push(order);
         }
+        tx.send(sell_batch).unwrap();
 
-        // Send 10 buy orders at same prices - should create matches
-        for i in 11..=20 {
+        // Collect buy orders into a batch
+        let mut buy_batch = Vec::new();
+        for i in 11u32..=20 {
             let price = 10_000 + ((i - 11) % 5) * 100; // Prices: 10000, 10100, 10200, 10300, 10400, ...
             let order = Order {
+                timestamp: 2000 + i as u64,
                 id: i,
-                side: Side::Buy,
                 price,
                 quantity: 1,
-                timestamp: 2000 + i,
+                instrument: 0,
+                side: Side::Buy,
             };
-            tx.send(order).unwrap();
+            buy_batch.push(order);
         }
+        tx.send(buy_batch).unwrap();
 
         drop(tx);
         MatchingEngine::run(rx);
@@ -147,23 +159,26 @@ mod tests {
         let (tx, rx) = crossbeam_channel::unbounded();
         let mut rng = rand::thread_rng();
 
-        // Generate 20 randomized orders with tick prices in [10_000, 20_000]
-        for i in 1..=20 {
+        // Generate 20 randomized orders into a batch
+        let mut batch = Vec::new();
+        for i in 1u32..=20 {
             let side = if rng.gen_bool(0.5) {
                 Side::Buy
             } else {
                 Side::Sell
             };
-            let price = rng.gen_range(10_000_u64..=20_000);
+            let price = rng.gen_range(10_000_u32..=20_000);
             let order = Order {
+                timestamp: 1000 + i as u64 * 100,
                 id: i,
-                side,
                 price,
                 quantity: 1,
-                timestamp: 1000 + i * 100,
+                instrument: 0,
+                side,
             };
-            tx.send(order).unwrap();
+            batch.push(order);
         }
+        tx.send(batch).unwrap();
 
         drop(tx);
         MatchingEngine::run(rx);
@@ -173,43 +188,50 @@ mod tests {
     fn test_matching_engine_fifo_with_multiple_orders() {
         let (tx, rx) = crossbeam_channel::unbounded();
 
-        // Send 5 sell orders all at 10_000 ticks ($100.00)
-        for i in 1..=5 {
+        // Collect all orders into a single batch for proper FIFO testing
+        let mut batch = Vec::new();
+
+        // 5 sell orders all at 10_000 ticks ($100.00)
+        for i in 1u32..=5 {
             let order = Order {
+                timestamp: 1000 + i as u64,
                 id: i,
+                price: 10_000,
+                quantity: 1,
+                instrument: 0,
                 side: Side::Sell,
-                price: 10_000,
-                quantity: 1,
-                timestamp: 1000 + i,
             };
-            tx.send(order).unwrap();
+            batch.push(order);
         }
 
-        // Send 3 buy orders at 10_000 - should match first 3 sells in FIFO order
-        for i in 6..=8 {
+        // 3 buy orders at 10_000 - should match first 3 sells in FIFO order
+        for i in 6u32..=8 {
             let order = Order {
+                timestamp: 2000 + i as u64,
                 id: i,
-                side: Side::Buy,
                 price: 10_000,
                 quantity: 1,
-                timestamp: 2000 + i,
+                instrument: 0,
+                side: Side::Buy,
             };
-            tx.send(order).unwrap();
+            batch.push(order);
         }
 
-        // Send 5 more buy orders at different prices (no matches)
-        let prices: [u64; 5] = [10_100, 10_200, 10_300, 10_400, 10_100];
-        for (idx, i) in (9..=13).enumerate() {
+        // 5 more buy orders at different prices (no matches)
+        let prices: [u32; 5] = [10_100, 10_200, 10_300, 10_400, 10_100];
+        for (idx, i) in (9u32..=13).enumerate() {
             let order = Order {
+                timestamp: 3000 + i as u64,
                 id: i,
-                side: Side::Buy,
                 price: prices[idx],
                 quantity: 1,
-                timestamp: 3000 + i,
+                instrument: 0,
+                side: Side::Buy,
             };
-            tx.send(order).unwrap();
+            batch.push(order);
         }
 
+        tx.send(batch).unwrap();
         drop(tx);
         MatchingEngine::run(rx);
     }
@@ -219,18 +241,21 @@ mod tests {
         let (tx, rx) = crossbeam_channel::unbounded();
 
         // Alternating buy/sell orders with overlapping prices
-        for i in 1..=15 {
+        let mut batch = Vec::new();
+        for i in 1u32..=15 {
             let side = if i % 2 == 0 { Side::Buy } else { Side::Sell };
             let price = 10_000 + (i % 3) * 100; // Prices cycle: 10100, 10200, 10000, ...
             let order = Order {
+                timestamp: 1000 + i as u64 * 50,
                 id: i,
-                side,
                 price,
                 quantity: 1,
-                timestamp: 1000 + i * 50,
+                instrument: 0,
+                side,
             };
-            tx.send(order).unwrap();
+            batch.push(order);
         }
+        tx.send(batch).unwrap();
 
         drop(tx);
         MatchingEngine::run(rx);
@@ -240,42 +265,48 @@ mod tests {
     fn test_matching_engine_rejects_invalid_orders() {
         let (tx, rx) = crossbeam_channel::unbounded();
 
+        let mut batch = Vec::new();
+
         // Send valid orders
-        for i in 1..=5 {
+        for i in 1u32..=5 {
             let order = Order {
+                timestamp: 1000 + i as u64,
                 id: i,
-                side: Side::Buy,
                 price: 10_000,
                 quantity: 1,
-                timestamp: 1000 + i,
+                instrument: 0,
+                side: Side::Buy,
             };
-            tx.send(order).unwrap();
+            batch.push(order);
         }
 
         // Send invalid orders (zero quantity)
-        for i in 6..=10 {
+        for i in 6u32..=10 {
             let order = Order {
+                timestamp: 1000 + i as u64,
                 id: i,
-                side: Side::Buy,
                 price: 10_000,
                 quantity: 0, // Invalid!
-                timestamp: 1000 + i,
+                instrument: 0,
+                side: Side::Buy,
             };
-            tx.send(order).unwrap();
+            batch.push(order);
         }
 
         // Send more invalid orders (zero price)
-        for i in 11..=13 {
+        for i in 11u32..=13 {
             let order = Order {
+                timestamp: 1000 + i as u64,
                 id: i,
-                side: Side::Sell,
                 price: 0, // Invalid!
                 quantity: 10,
-                timestamp: 1000 + i,
+                instrument: 0,
+                side: Side::Sell,
             };
-            tx.send(order).unwrap();
+            batch.push(order);
         }
 
+        tx.send(batch).unwrap();
         drop(tx);
         let stats = MatchingEngine::run(rx);
 

@@ -3,15 +3,15 @@ use std::collections::VecDeque;
 
 // Instrument price range in ticks (circuit breaker bounds)
 // $100.00 = 10,000 ticks, $200.00 = 20,000 ticks
-pub const MIN_TICK: u64 = 10_000;
-pub const MAX_TICK: u64 = 20_000;
+pub const MIN_TICK: u32 = 10_000;
+pub const MAX_TICK: u32 = 20_000;
 const NUM_LEVELS: usize = (MAX_TICK - MIN_TICK + 1) as usize; // 10,001
 
 /// Result of matching an order. Trades are written to the caller-provided buffer.
 #[derive(Debug, Clone)]
 pub struct MatchResult {
     pub trade_count: usize,            // Number of trades written to the buffer
-    pub remaining_quantity: u64,       // Quantity that wasn't matched (added to book)
+    pub remaining_quantity: u32,       // Quantity that wasn't matched (added to book)
     pub validation_error: Option<OrderValidationError>,  // If order was invalid
 }
 
@@ -25,7 +25,7 @@ pub struct LimitOrderBook {
 
 /// Convert a tick price to an array index
 #[inline(always)]
-fn price_index(price: u64) -> usize {
+fn price_index(price: u32) -> usize {
     (price - MIN_TICK) as usize
 }
 
@@ -49,7 +49,7 @@ impl LimitOrderBook {
     }
 
     #[cfg(test)]
-    pub fn get_orders_at_price(&self, side: &Side, price: u64) -> Option<&VecDeque<Order>> {
+    pub fn get_orders_at_price(&self, side: &Side, price: u32) -> Option<&VecDeque<Order>> {
         if price < MIN_TICK || price > MAX_TICK {
             return None;
         }
@@ -101,29 +101,32 @@ impl LimitOrderBook {
                             order.quantity -= matched_sell.quantity;
 
                             let buy_trade = Order {
+                                timestamp: order.timestamp,
                                 id: order.id,
-                                side: order.side,
                                 price: order.price,
                                 quantity: matched_sell.quantity,
-                                timestamp: order.timestamp,
+                                instrument: order.instrument,
+                                side: order.side,
                             };
                             trades.push((buy_trade, matched_sell));
                         } else {
                             matched_sell.quantity -= order.quantity;
 
                             let sell_trade = Order {
+                                timestamp: matched_sell.timestamp,
                                 id: matched_sell.id,
-                                side: matched_sell.side,
                                 price: matched_sell.price,
                                 quantity: order.quantity,
-                                timestamp: matched_sell.timestamp,
+                                instrument: matched_sell.instrument,
+                                side: matched_sell.side,
                             };
                             let buy_trade = Order {
+                                timestamp: order.timestamp,
                                 id: order.id,
-                                side: order.side,
                                 price: order.price,
                                 quantity: order.quantity,
-                                timestamp: order.timestamp,
+                                instrument: order.instrument,
+                                side: order.side,
                             };
                             trades.push((buy_trade, sell_trade));
 
@@ -144,29 +147,32 @@ impl LimitOrderBook {
                             order.quantity -= matched_buy.quantity;
 
                             let sell_trade = Order {
+                                timestamp: order.timestamp,
                                 id: order.id,
-                                side: order.side,
                                 price: order.price,
                                 quantity: matched_buy.quantity,
-                                timestamp: order.timestamp,
+                                instrument: order.instrument,
+                                side: order.side,
                             };
                             trades.push((matched_buy, sell_trade));
                         } else {
                             matched_buy.quantity -= order.quantity;
 
                             let buy_trade = Order {
+                                timestamp: matched_buy.timestamp,
                                 id: matched_buy.id,
-                                side: matched_buy.side,
                                 price: matched_buy.price,
                                 quantity: order.quantity,
-                                timestamp: matched_buy.timestamp,
+                                instrument: matched_buy.instrument,
+                                side: matched_buy.side,
                             };
                             let sell_trade = Order {
+                                timestamp: order.timestamp,
                                 id: order.id,
-                                side: order.side,
                                 price: order.price,
                                 quantity: order.quantity,
-                                timestamp: order.timestamp,
+                                instrument: order.instrument,
+                                side: order.side,
                             };
                             trades.push((buy_trade, sell_trade));
 
@@ -208,11 +214,12 @@ mod tests {
     fn test_add_buy_order() {
         let mut book = LimitOrderBook::new();
         let order = Order {
+            timestamp: 1000,
             id: 1,
-            side: Side::Buy,
             price: 10_000, // $100.00
             quantity: 10,
-            timestamp: 1000,
+            instrument: 0,
+            side: Side::Buy,
         };
 
         book.add_order(order.clone());
@@ -227,11 +234,12 @@ mod tests {
     fn test_add_sell_order() {
         let mut book = LimitOrderBook::new();
         let order = Order {
+            timestamp: 2000,
             id: 2,
-            side: Side::Sell,
             price: 10_400, // $104.00
             quantity: 5,
-            timestamp: 2000,
+            instrument: 0,
+            side: Side::Sell,
         };
 
         book.add_order(order.clone());
@@ -247,19 +255,21 @@ mod tests {
         let mut book = LimitOrderBook::new();
 
         let order1 = Order {
+            timestamp: 1000,
             id: 1,
-            side: Side::Buy,
             price: 10_000,
             quantity: 10,
-            timestamp: 1000,
+            instrument: 0,
+            side: Side::Buy,
         };
 
         let order2 = Order {
+            timestamp: 2000,
             id: 2,
-            side: Side::Buy,
             price: 10_000,
             quantity: 5,
-            timestamp: 2000,
+            instrument: 0,
+            side: Side::Buy,
         };
 
         book.add_order(order1.clone());
@@ -278,19 +288,21 @@ mod tests {
         let mut book = LimitOrderBook::new();
 
         let order1 = Order {
+            timestamp: 1000,
             id: 1,
-            side: Side::Buy,
             price: 10_000,
             quantity: 10,
-            timestamp: 1000,
+            instrument: 0,
+            side: Side::Buy,
         };
 
         let order2 = Order {
+            timestamp: 2000,
             id: 2,
-            side: Side::Buy,
             price: 10_100,
             quantity: 5,
-            timestamp: 2000,
+            instrument: 0,
+            side: Side::Buy,
         };
 
         book.add_order(order1.clone());
@@ -314,21 +326,23 @@ mod tests {
 
         // Add a sell order first
         let sell_order = Order {
+            timestamp: 1000,
             id: 1,
-            side: Side::Sell,
             price: 10_000,
             quantity: 10,
-            timestamp: 1000,
+            instrument: 0,
+            side: Side::Sell,
         };
         book.add_order(sell_order.clone());
 
         // Try to match with a buy order at same price
         let buy_order = Order {
+            timestamp: 2000,
             id: 2,
-            side: Side::Buy,
             price: 10_000,
             quantity: 10,
-            timestamp: 2000,
+            instrument: 0,
+            side: Side::Buy,
         };
 
         let result = book.try_match(buy_order.clone(), &mut trades);
@@ -354,21 +368,23 @@ mod tests {
 
         // Add a buy order first
         let buy_order = Order {
+            timestamp: 1000,
             id: 1,
-            side: Side::Buy,
             price: 10_000,
             quantity: 10,
-            timestamp: 1000,
+            instrument: 0,
+            side: Side::Buy,
         };
         book.add_order(buy_order.clone());
 
         // Try to match with a sell order at same price
         let sell_order = Order {
+            timestamp: 2000,
             id: 2,
-            side: Side::Sell,
             price: 10_000,
             quantity: 10,
-            timestamp: 2000,
+            instrument: 0,
+            side: Side::Sell,
         };
 
         let result = book.try_match(sell_order.clone(), &mut trades);
@@ -394,21 +410,23 @@ mod tests {
 
         // Add a sell order at $104.00
         let sell_order = Order {
+            timestamp: 1000,
             id: 1,
-            side: Side::Sell,
             price: 10_400,
             quantity: 10,
-            timestamp: 1000,
+            instrument: 0,
+            side: Side::Sell,
         };
         book.add_order(sell_order.clone());
 
         // Try to match with a buy order at $100.00
         let buy_order = Order {
+            timestamp: 2000,
             id: 2,
-            side: Side::Buy,
             price: 10_000,
             quantity: 10,
-            timestamp: 2000,
+            instrument: 0,
+            side: Side::Buy,
         };
 
         let result = book.try_match(buy_order.clone(), &mut trades);
@@ -434,11 +452,12 @@ mod tests {
         let mut trades = Vec::new();
 
         let buy_order = Order {
+            timestamp: 1000,
             id: 1,
-            side: Side::Buy,
             price: 10_000,
             quantity: 10,
-            timestamp: 1000,
+            instrument: 0,
+            side: Side::Buy,
         };
 
         let result = book.try_match(buy_order.clone(), &mut trades);
@@ -459,25 +478,28 @@ mod tests {
 
         // Add three sell orders at $100.00
         let sell_order1 = Order {
+            timestamp: 1000,
             id: 1,
-            side: Side::Sell,
             price: 10_000,
             quantity: 3,
-            timestamp: 1000,
+            instrument: 0,
+            side: Side::Sell,
         };
         let sell_order2 = Order {
+            timestamp: 2000,
             id: 2,
-            side: Side::Sell,
             price: 10_000,
             quantity: 2,
-            timestamp: 2000,
+            instrument: 0,
+            side: Side::Sell,
         };
         let sell_order3 = Order {
+            timestamp: 3000,
             id: 3,
-            side: Side::Sell,
             price: 10_000,
             quantity: 4,
-            timestamp: 3000,
+            instrument: 0,
+            side: Side::Sell,
         };
 
         book.add_order(sell_order1.clone());
@@ -486,11 +508,12 @@ mod tests {
 
         // Try to buy 8 units - should match sell1 (3) + sell2 (2) + partial sell3 (3)
         let buy_order = Order {
+            timestamp: 4000,
             id: 10,
-            side: Side::Buy,
             price: 10_000,
             quantity: 8,
-            timestamp: 4000,
+            instrument: 0,
+            side: Side::Buy,
         };
 
         let mut trades = Vec::new();
@@ -541,21 +564,23 @@ mod tests {
 
         // Add a buy order with quantity 5
         let buy_order = Order {
+            timestamp: 1000,
             id: 1,
-            side: Side::Buy,
             price: 10_000,
             quantity: 5,
-            timestamp: 1000,
+            instrument: 0,
+            side: Side::Buy,
         };
         book.add_order(buy_order.clone());
 
         // Sell order with quantity 8 - will partially match buy (5 units), leaving 3
         let sell_order = Order {
+            timestamp: 2000,
             id: 2,
-            side: Side::Sell,
             price: 10_000,
             quantity: 8,
-            timestamp: 2000,
+            instrument: 0,
+            side: Side::Sell,
         };
 
         let mut trades = Vec::new();
@@ -590,18 +615,20 @@ mod tests {
 
         // Add two sell orders at same price
         let sell_order1 = Order {
+            timestamp: 1000,
             id: 1,
-            side: Side::Sell,
             price: 10_000,
             quantity: 10,
-            timestamp: 1000,
+            instrument: 0,
+            side: Side::Sell,
         };
         let sell_order2 = Order {
+            timestamp: 2000,
             id: 2,
-            side: Side::Sell,
             price: 10_000,
             quantity: 10,
-            timestamp: 2000,
+            instrument: 0,
+            side: Side::Sell,
         };
 
         book.add_order(sell_order1.clone());
@@ -609,11 +636,12 @@ mod tests {
 
         // Match with a buy order - should match oldest (sell_order1)
         let buy_order = Order {
+            timestamp: 3000,
             id: 3,
-            side: Side::Buy,
             price: 10_000,
             quantity: 10,
-            timestamp: 3000,
+            instrument: 0,
+            side: Side::Buy,
         };
 
         let mut trades = Vec::new();
@@ -640,11 +668,12 @@ mod tests {
         let mut trades = Vec::new();
 
         let invalid_order = Order {
+            timestamp: 1000,
             id: 1,
-            side: Side::Buy,
             price: 10_000,
             quantity: 0,  // Invalid!
-            timestamp: 1000,
+            instrument: 0,
+            side: Side::Buy,
         };
 
         let result = book.try_match(invalid_order, &mut trades);
@@ -664,11 +693,12 @@ mod tests {
         let mut trades = Vec::new();
 
         let invalid_order = Order {
+            timestamp: 1000,
             id: 1,
-            side: Side::Buy,
             price: 0,  // Invalid!
             quantity: 10,
-            timestamp: 1000,
+            instrument: 0,
+            side: Side::Buy,
         };
 
         let result = book.try_match(invalid_order, &mut trades);
@@ -689,11 +719,12 @@ mod tests {
 
         // Price below MIN_TICK (circuit breaker)
         let too_low = Order {
+            timestamp: 1000,
             id: 1,
-            side: Side::Buy,
             price: 5_000, // Below MIN_TICK (10,000)
             quantity: 10,
-            timestamp: 1000,
+            instrument: 0,
+            side: Side::Buy,
         };
         let result = book.try_match(too_low, &mut trades);
         assert_eq!(result.validation_error, Some(OrderValidationError::PriceOutOfRange));
@@ -702,11 +733,12 @@ mod tests {
 
         // Price above MAX_TICK (circuit breaker)
         let too_high = Order {
+            timestamp: 2000,
             id: 2,
-            side: Side::Sell,
             price: 25_000, // Above MAX_TICK (20,000)
             quantity: 5,
-            timestamp: 2000,
+            instrument: 0,
+            side: Side::Sell,
         };
         let result = book.try_match(too_high, &mut trades);
         assert_eq!(result.validation_error, Some(OrderValidationError::PriceOutOfRange));
@@ -715,21 +747,23 @@ mod tests {
 
         // Edge: exactly at MIN_TICK and MAX_TICK should be accepted
         let at_min = Order {
+            timestamp: 3000,
             id: 3,
-            side: Side::Buy,
             price: MIN_TICK,
             quantity: 1,
-            timestamp: 3000,
+            instrument: 0,
+            side: Side::Buy,
         };
         let result = book.try_match(at_min, &mut trades);
         assert!(result.validation_error.is_none());
 
         let at_max = Order {
+            timestamp: 4000,
             id: 4,
-            side: Side::Sell,
             price: MAX_TICK,
             quantity: 1,
-            timestamp: 4000,
+            instrument: 0,
+            side: Side::Sell,
         };
         let result = book.try_match(at_max, &mut trades);
         assert!(result.validation_error.is_none());
