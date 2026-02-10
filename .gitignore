@@ -16,8 +16,9 @@ target
 # Profiling artifacts
 *.json.gz
 
-# Claude Code
-.claude/
+# Claude Code (track commands and agents, ignore settings and memory)
+.claude/settings*.json
+.claude/agent-memory/
 
 # RustRover / JetBrains
 .idea/
