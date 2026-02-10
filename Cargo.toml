@@ -6,12 +6,26 @@ edition = "2024"
 [dependencies]
 rand = { version = "0.8", features = ["small_rng"] }
 crossbeam-channel = "0.5"
+serde = { version = "1", features = ["derive"] }
+bincode = "1"
 
 [profile.release]
 debug = true # Enable debug symbols for profiling
 
 [dev-dependencies]
 criterion = "0.5"
+
+[[bin]]
+name = "order_book"
+path = "src/main.rs"
+
+[[bin]]
+name = "gateway"
+path = "src/bin/gateway.rs"
+
+[[bin]]
+name = "client"
+path = "src/bin/client.rs"
 
 [[bench]]
 name = "order_matching"

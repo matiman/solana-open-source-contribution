@@ -1,6 +1,6 @@
 use order_book::{
     generator,
-    instrument::{self, ALL_INSTRUMENTS, NUM_INSTRUMENTS},
+    instrument::{Instrument, ALL_INSTRUMENTS, NUM_INSTRUMENTS},
     matching_engine::{MatchingEngine, MatchingStats},
 };
 use std::thread;
@@ -10,7 +10,7 @@ const ORDERS_PER_INSTRUMENT: u32 = 100_000_000;
 const CHANNEL_BUFFER_SIZE: usize = 100; // Batches, not orders (100 × 1024 = 102K orders in flight)
 
 struct InstrumentResult {
-    instrument_id: u8,
+    instrument: Instrument,
     stats: MatchingStats,
     gen_time: Duration,
     match_time: Duration,
@@ -23,7 +23,7 @@ fn main() {
     println!("============================================");
     let instrument_names: Vec<_> = ALL_INSTRUMENTS
         .iter()
-        .map(|&id| instrument::name(id))
+        .map(|id| format!("{}", id))
         .collect();
     println!("Instruments: {} ({})", NUM_INSTRUMENTS, instrument_names.join(", "));
     println!("Orders per instrument: {}", ORDERS_PER_INSTRUMENT);
@@ -42,19 +42,19 @@ fn main() {
     let mut generator_handles = Vec::with_capacity(NUM_INSTRUMENTS);
     let mut engine_handles = Vec::with_capacity(NUM_INSTRUMENTS);
 
-    for &instrument_id in &ALL_INSTRUMENTS {
+    for &instrument in &ALL_INSTRUMENTS {
         let (tx, rx) = crossbeam_channel::bounded(CHANNEL_BUFFER_SIZE);
 
         // Each instrument gets its own ID range to avoid collisions
-        let start_id = instrument_id as u32 * ORDERS_PER_INSTRUMENT + 1;
+        let start_id = instrument.as_u8() as u32 * ORDERS_PER_INSTRUMENT + 1;
 
         // Spawn generator thread - returns elapsed time
         let gen_handle = thread::spawn(move || {
             let gen_start = Instant::now();
-            generator::generate_orders(tx, ORDERS_PER_INSTRUMENT, start_id, instrument_id);
+            generator::generate_orders(tx, ORDERS_PER_INSTRUMENT, start_id, instrument);
             gen_start.elapsed()
         });
-        generator_handles.push((instrument_id, gen_handle));
+        generator_handles.push((instrument, gen_handle));
 
         // Spawn matching engine thread - returns (stats, elapsed time)
         let engine_handle = thread::spawn(move || {
@@ -62,42 +62,36 @@ fn main() {
             let stats = MatchingEngine::run(rx);
             (stats, match_start.elapsed())
         });
-        engine_handles.push((instrument_id, engine_handle));
+        engine_handles.push((instrument, engine_handle));
     }
 
     // Collect results
     let mut results: Vec<InstrumentResult> = Vec::with_capacity(NUM_INSTRUMENTS);
 
     // Wait for generators and collect their times
-    let mut gen_times: Vec<(u8, Duration)> = Vec::with_capacity(NUM_INSTRUMENTS);
-    for (instrument_id, handle) in generator_handles {
+    let mut gen_times: Vec<(Instrument, Duration)> = Vec::with_capacity(NUM_INSTRUMENTS);
+    for (instrument, handle) in generator_handles {
         let gen_time = handle.join().unwrap_or_else(|_| {
-            panic!(
-                "{} generator thread panicked",
-                instrument::name(instrument_id)
-            )
+            panic!("{} generator thread panicked", instrument)
         });
-        gen_times.push((instrument_id, gen_time));
+        gen_times.push((instrument, gen_time));
     }
 
     // Wait for matchers and collect their stats + times
-    for (instrument_id, handle) in engine_handles {
+    for (instrument, handle) in engine_handles {
         let (stats, match_time) = handle.join().unwrap_or_else(|_| {
-            panic!(
-                "{} matching engine thread panicked",
-                instrument::name(instrument_id)
-            )
+            panic!("{} matching engine thread panicked", instrument)
         });
 
         // Find corresponding generator time
         let gen_time = gen_times
             .iter()
-            .find(|(id, _)| *id == instrument_id)
+            .find(|(id, _)| *id == instrument)
             .map(|(_, t)| *t)
             .unwrap();
 
         results.push(InstrumentResult {
-            instrument_id,
+            instrument,
             stats,
             gen_time,
             match_time,
@@ -121,14 +115,13 @@ fn main() {
     println!("============================================");
 
     for result in &results {
-        let name = instrument::name(result.instrument_id);
         let stats = &result.stats;
         let gen_secs = result.gen_time.as_secs_f64();
         let match_secs = result.match_time.as_secs_f64();
         let gen_rate = ORDERS_PER_INSTRUMENT as f64 / gen_secs;
         let match_rate = stats.orders_received as f64 / match_secs;
 
-        println!("\n{}", name);
+        println!("\n{}", result.instrument);
         println!("  Orders received:    {}", stats.orders_received);
         println!("  Trades executed:    {}", stats.total_trades);
         println!("  Volume matched:     {} units", stats.volume_matched);
@@ -220,12 +213,12 @@ fn main() {
     println!("============================================");
     println!(
         "Slowest generator: {} ({:.3}s)",
-        instrument::name(slowest_gen.instrument_id),
+        slowest_gen.instrument,
         slowest_gen.gen_time.as_secs_f64()
     );
     println!(
         "Slowest matcher:   {} ({:.3}s)",
-        instrument::name(slowest_match.instrument_id),
+        slowest_match.instrument,
         slowest_match.match_time.as_secs_f64()
     );
     println!();

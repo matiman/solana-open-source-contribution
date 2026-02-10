@@ -1,3 +1,4 @@
+use crate::instrument::Instrument;
 use crate::order::{Order, Side};
 use crossbeam_channel::Sender;
 use rand::{Rng, SeedableRng};
@@ -14,7 +15,7 @@ pub const BATCH_SIZE: usize = 1024;
 /// Order batch type for channel communication
 pub type OrderBatch = Vec<Order>;
 
-pub fn generate_orders(tx: Sender<OrderBatch>, count: u32, start_id: u32, instrument: u8) {
+pub fn generate_orders(tx: Sender<OrderBatch>, count: u32, start_id: u32, instrument: Instrument) {
     // SmallRng (Xoshiro256++) — fast non-crypto RNG, ~4x faster than StdRng (ChaCha20)
     let mut rng = rand::rngs::SmallRng::from_entropy();
 
@@ -101,7 +102,7 @@ mod tests {
         let (tx, rx) = crossbeam_channel::unbounded();
 
         std::thread::spawn(move || {
-            generate_orders(tx, 1, 1, 0);
+            generate_orders(tx, 1, 1, Instrument::BTCUSDC);
         });
 
         // Receive batch and get first order
@@ -121,7 +122,7 @@ mod tests {
         let (tx, rx) = crossbeam_channel::unbounded();
 
         std::thread::spawn(move || {
-            generate_orders(tx, 10, 1, 0);
+            generate_orders(tx, 10, 1, Instrument::BTCUSDC);
         });
 
         // Receive batch and check all orders
@@ -142,7 +143,7 @@ mod tests {
         let num_orders = BATCH_SIZE as u32 + 100;
 
         std::thread::spawn(move || {
-            generate_orders(tx, num_orders, 1, 0);
+            generate_orders(tx, num_orders, 1, Instrument::BTCUSDC);
         });
 
         // First batch should be exactly BATCH_SIZE
@@ -162,22 +163,22 @@ mod tests {
         // Demonstrate the smart constructor pattern
         // This is how orders SHOULD be created in production code
         let valid_result = Order::new(
-            1,           // id: u32
-            0,           // instrument
+            1,                       // id: u32
+            Instrument::BTCUSDC,     // instrument
             Side::Buy,
-            15_050,      // $150.50 - price: u32
-            5,           // quantity: u32
-            1000,        // timestamp: u64
+            15_050,                  // $150.50 - price: u32
+            5,                       // quantity: u32
+            1000,                    // timestamp: u64
         );
         assert!(valid_result.is_ok());
 
         let invalid_result = Order::new(
-            2,           // id: u32
-            0,           // instrument
+            2,                       // id: u32
+            Instrument::BTCUSDC,     // instrument
             Side::Sell,
-            0,           // Invalid price!
-            10,          // quantity: u32
-            2000,        // timestamp: u64
+            0,                       // Invalid price!
+            10,                      // quantity: u32
+            2000,                    // timestamp: u64
         );
         assert!(invalid_result.is_err());
     }

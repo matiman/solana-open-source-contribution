@@ -82,6 +82,7 @@ impl Default for MatchingEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::instrument::Instrument;
     use crate::order::Side;
     use rand::Rng;
 
@@ -95,7 +96,7 @@ mod tests {
             id: 1,
             price: 10_000,
             quantity: 1,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Buy,
         };
 
@@ -127,7 +128,7 @@ mod tests {
                 id: i,
                 price,
                 quantity: 1,
-                instrument: 0,
+                instrument: Instrument::BTCUSDC,
                 side: Side::Sell,
             };
             sell_batch.push(order);
@@ -143,7 +144,7 @@ mod tests {
                 id: i,
                 price,
                 quantity: 1,
-                instrument: 0,
+                instrument: Instrument::BTCUSDC,
                 side: Side::Buy,
             };
             buy_batch.push(order);
@@ -173,7 +174,7 @@ mod tests {
                 id: i,
                 price,
                 quantity: 1,
-                instrument: 0,
+                instrument: Instrument::BTCUSDC,
                 side,
             };
             batch.push(order);
@@ -198,7 +199,7 @@ mod tests {
                 id: i,
                 price: 10_000,
                 quantity: 1,
-                instrument: 0,
+                instrument: Instrument::BTCUSDC,
                 side: Side::Sell,
             };
             batch.push(order);
@@ -211,7 +212,7 @@ mod tests {
                 id: i,
                 price: 10_000,
                 quantity: 1,
-                instrument: 0,
+                instrument: Instrument::BTCUSDC,
                 side: Side::Buy,
             };
             batch.push(order);
@@ -225,7 +226,7 @@ mod tests {
                 id: i,
                 price: prices[idx],
                 quantity: 1,
-                instrument: 0,
+                instrument: Instrument::BTCUSDC,
                 side: Side::Buy,
             };
             batch.push(order);
@@ -250,7 +251,7 @@ mod tests {
                 id: i,
                 price,
                 quantity: 1,
-                instrument: 0,
+                instrument: Instrument::BTCUSDC,
                 side,
             };
             batch.push(order);
@@ -274,7 +275,7 @@ mod tests {
                 id: i,
                 price: 10_000,
                 quantity: 1,
-                instrument: 0,
+                instrument: Instrument::BTCUSDC,
                 side: Side::Buy,
             };
             batch.push(order);
@@ -287,7 +288,7 @@ mod tests {
                 id: i,
                 price: 10_000,
                 quantity: 0, // Invalid!
-                instrument: 0,
+                instrument: Instrument::BTCUSDC,
                 side: Side::Buy,
             };
             batch.push(order);
@@ -300,7 +301,7 @@ mod tests {
                 id: i,
                 price: 0, // Invalid!
                 quantity: 10,
-                instrument: 0,
+                instrument: Instrument::BTCUSDC,
                 side: Side::Sell,
             };
             batch.push(order);

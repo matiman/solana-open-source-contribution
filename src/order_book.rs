@@ -209,6 +209,7 @@ impl Default for LimitOrderBook {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::instrument::Instrument;
 
     #[test]
     fn test_add_buy_order() {
@@ -218,7 +219,7 @@ mod tests {
             id: 1,
             price: 10_000, // $100.00
             quantity: 10,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Buy,
         };
 
@@ -238,7 +239,7 @@ mod tests {
             id: 2,
             price: 10_400, // $104.00
             quantity: 5,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Sell,
         };
 
@@ -259,7 +260,7 @@ mod tests {
             id: 1,
             price: 10_000,
             quantity: 10,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Buy,
         };
 
@@ -268,7 +269,7 @@ mod tests {
             id: 2,
             price: 10_000,
             quantity: 5,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Buy,
         };
 
@@ -292,7 +293,7 @@ mod tests {
             id: 1,
             price: 10_000,
             quantity: 10,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Buy,
         };
 
@@ -301,7 +302,7 @@ mod tests {
             id: 2,
             price: 10_100,
             quantity: 5,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Buy,
         };
 
@@ -330,7 +331,7 @@ mod tests {
             id: 1,
             price: 10_000,
             quantity: 10,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Sell,
         };
         book.add_order(sell_order.clone());
@@ -341,7 +342,7 @@ mod tests {
             id: 2,
             price: 10_000,
             quantity: 10,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Buy,
         };
 
@@ -372,7 +373,7 @@ mod tests {
             id: 1,
             price: 10_000,
             quantity: 10,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Buy,
         };
         book.add_order(buy_order.clone());
@@ -383,7 +384,7 @@ mod tests {
             id: 2,
             price: 10_000,
             quantity: 10,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Sell,
         };
 
@@ -414,7 +415,7 @@ mod tests {
             id: 1,
             price: 10_400,
             quantity: 10,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Sell,
         };
         book.add_order(sell_order.clone());
@@ -425,7 +426,7 @@ mod tests {
             id: 2,
             price: 10_000,
             quantity: 10,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Buy,
         };
 
@@ -456,7 +457,7 @@ mod tests {
             id: 1,
             price: 10_000,
             quantity: 10,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Buy,
         };
 
@@ -482,7 +483,7 @@ mod tests {
             id: 1,
             price: 10_000,
             quantity: 3,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Sell,
         };
         let sell_order2 = Order {
@@ -490,7 +491,7 @@ mod tests {
             id: 2,
             price: 10_000,
             quantity: 2,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Sell,
         };
         let sell_order3 = Order {
@@ -498,7 +499,7 @@ mod tests {
             id: 3,
             price: 10_000,
             quantity: 4,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Sell,
         };
 
@@ -512,7 +513,7 @@ mod tests {
             id: 10,
             price: 10_000,
             quantity: 8,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Buy,
         };
 
@@ -568,7 +569,7 @@ mod tests {
             id: 1,
             price: 10_000,
             quantity: 5,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Buy,
         };
         book.add_order(buy_order.clone());
@@ -579,7 +580,7 @@ mod tests {
             id: 2,
             price: 10_000,
             quantity: 8,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Sell,
         };
 
@@ -619,7 +620,7 @@ mod tests {
             id: 1,
             price: 10_000,
             quantity: 10,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Sell,
         };
         let sell_order2 = Order {
@@ -627,7 +628,7 @@ mod tests {
             id: 2,
             price: 10_000,
             quantity: 10,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Sell,
         };
 
@@ -640,7 +641,7 @@ mod tests {
             id: 3,
             price: 10_000,
             quantity: 10,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Buy,
         };
 
@@ -672,7 +673,7 @@ mod tests {
             id: 1,
             price: 10_000,
             quantity: 0,  // Invalid!
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Buy,
         };
 
@@ -697,7 +698,7 @@ mod tests {
             id: 1,
             price: 0,  // Invalid!
             quantity: 10,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Buy,
         };
 
@@ -723,7 +724,7 @@ mod tests {
             id: 1,
             price: 5_000, // Below MIN_TICK (10,000)
             quantity: 10,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Buy,
         };
         let result = book.try_match(too_low, &mut trades);
@@ -737,7 +738,7 @@ mod tests {
             id: 2,
             price: 25_000, // Above MAX_TICK (20,000)
             quantity: 5,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Sell,
         };
         let result = book.try_match(too_high, &mut trades);
@@ -751,7 +752,7 @@ mod tests {
             id: 3,
             price: MIN_TICK,
             quantity: 1,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Buy,
         };
         let result = book.try_match(at_min, &mut trades);
@@ -762,7 +763,7 @@ mod tests {
             id: 4,
             price: MAX_TICK,
             quantity: 1,
-            instrument: 0,
+            instrument: Instrument::BTCUSDC,
             side: Side::Sell,
         };
         let result = book.try_match(at_max, &mut trades);
