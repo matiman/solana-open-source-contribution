@@ -1,4 +1,4 @@
-# Order Book Matching Engine
+# Limit Order Book Matching Engine
 
 A high-performance limit order matching engine built in Rust. Processes 400M orders across 4 instruments at ~160M orders/sec on 16 cores. i.e. ~2.5 sec for 400M orders.
 
