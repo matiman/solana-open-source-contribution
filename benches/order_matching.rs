@@ -1,4 +1,5 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use order_book::instrument::Instrument;
 use order_book::order::{Order, Side};
 use order_book::order_book::LimitOrderBook;
 use rand::rngs::StdRng;
@@ -18,7 +19,7 @@ fn generate_test_order(rng: &mut StdRng, id: u32) -> Order {
         id,
         price,
         quantity: 1,
-        instrument: 0,
+        instrument: Instrument::BTCUSDC,
         side,
     }
 }
