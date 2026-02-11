@@ -34,6 +34,7 @@ fn main() {
     println!("=========================");
     println!("Listening on {}", addr);
     println!("Instruments: {} ({})", NUM_INSTRUMENTS, instrument_names.join(", "));
+    println!("Channel buffer: {} batches per instrument", CHANNEL_BUFFER_SIZE);
     println!("Expecting {} client(s)", expected_clients);
     println!();
 
