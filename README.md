@@ -82,4 +82,4 @@ Thread count: 4 client processes (1 thread each) + 1 gateway process (1 main + 4
 | Task 8 baseline | 1M | ~3.6M orders/sec | Initial implementation |
 | HashMap → fixed array + async → sync | 100M | ~25M orders/sec | Eliminated hashing and runtime overhead |
 | 4 instruments + batching + struct padding | 400M | ~160M orders/sec | Parallelism + cache efficiency |
-| Distributed (gateway + TCP clients) | 400K | TBD | Network boundary with serde validation |
+| Distributed (gateway + TCP clients) | 400M | TBD | Network boundary with serde + bincode validation |
